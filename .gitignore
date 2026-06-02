@@ -1,0 +1,30 @@
+# Abhängigkeiten
+node_modules/
+.pnp
+.pnp.js
+
+# Build-Artefakte
+dist/
+build/
+.next/
+out/
+
+# Umgebungsvariablen & Geheimnisse
+.env
+.env*.local
+!.env.example
+
+# Logs & Debugging
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+.tsbuildinfo
+
+# OS-spezifische Dateien
+.DS_Store
+Thumbs.db
+
+# Editor-Einstellungen
+.vscode/
+.idea/

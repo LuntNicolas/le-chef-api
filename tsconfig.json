@@ -1,0 +1,68 @@
+{
+  // Visit https://aka.ms/tsconfig to read more about this file
+  "compilerOptions": {
+    // File Layout
+    "rootDir": "./src",
+    "outDir": "./dist",
+    // Environment Settings
+    // See also https://aka.ms/tsconfig/module
+    "module": "NodeNext",
+    // Configures Node.js to use ESM module system
+    "target": "ESNext",
+    // Uses the latest ECMAScript features for modern JavaScript support
+    "types": [],
+    // For nodejs:
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    // "types": ["node"],
+    // and npm install -D @types/node
+
+    // Other Outputs
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    // Stricter Typechecking Options
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    // Style Options
+    // "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "rewriteRelativeImportExtensions": true,
+    "noImplicitAny": true,
+    // Prevents the use of `any` type unless explicitly defined
+    "allowImportingTsExtensions": true,
+    // Allows importing `.ts` files with their extensions
+    // "noUnusedLocals": true,
+    // "noUnusedParameters": true,
+    // "noFallthroughCasesInSwitch": true,
+    // "noPropertyAccessFromIndexSignature": true,
+
+    // Recommended Options
+    "strict": true,
+    "jsx": "react-jsx",
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    // Forces TypeScript to treat files as modules
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    // Ensures compatibility between CommonJS and ESM modules
+    "resolveJsonModule": true,
+    // Allows importing JSON files as modules
+
+    "forceConsistentCasingInFileNames": true,
+    // Prevents case-sensitivity issues across platforms
+    "moduleResolution": "NodeNext"
+    // Resolves modules using Node’s ESM strategy
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
