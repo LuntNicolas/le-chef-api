@@ -1,4 +1,3 @@
-import {sql} from "../config/db.ts";
 import {jsonb, pgTable, varchar, uuid, timestamp} from "drizzle-orm/pg-core";
 
 export const householdsTable = pgTable("households", {

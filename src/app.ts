@@ -1,5 +1,4 @@
 import express from 'express';
-import {sql} from "./config/db.ts";
 import {clerkMiddleware} from '@clerk/express'
 import rateLimiter from "./middleware/rateLimiter.ts";
 import authRoute from "./routes/authRoute.ts"
