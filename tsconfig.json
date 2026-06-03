@@ -10,7 +10,9 @@
     // Configures Node.js to use ESM module system
     "target": "ESNext",
     // Uses the latest ECMAScript features for modern JavaScript support
-    "types": [],
+    "types": [
+      "node"
+    ],
     // For nodejs:
     "lib": [
       "ES2022",
@@ -59,7 +61,8 @@
     // Resolves modules using Node’s ESM strategy
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "drizzle.config.ts"
   ],
   "exclude": [
     "node_modules",

@@ -1,4 +1,7 @@
-import {neon} from '@neondatabase/serverless'
-import "dotenv/config"
+// src/config/db.ts
+import 'dotenv/config'; // Dies MUSS ganz oben stehen!
+import {neon} from '@neondatabase/serverless';
+import {drizzle} from 'drizzle-orm/neon-http';
 
 export const sql = neon(process.env.DATABASE_URL!);
+export const db = drizzle({client: sql});

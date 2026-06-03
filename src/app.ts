@@ -1,17 +1,18 @@
 import express from 'express';
 import {sql} from "./config/db.ts";
+import {clerkMiddleware} from '@clerk/express'
+import rateLimiter from "./middleware/rateLimiter.ts";
+import authRoute from "./routes/authRoute.ts"
+
 
 const app = express();
 
-const initDB = async () => {
-    try {
-        await sql`
-        `;
-    } catch (e) {
-    }
-}
+//middleware
+app.use(rateLimiter);
+app.use(express.json());
+app.use(clerkMiddleware());
+app.use("/api/auth", authRoute);
+// app.use("/api/protected/fridge")
 
-app.get('/', (req, res) => {
-    res.send('Hello 5')
-})
+
 export default app;

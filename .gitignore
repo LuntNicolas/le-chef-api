@@ -11,7 +11,7 @@ out/
 
 # Umgebungsvariablen & Geheimnisse
 .env
-.env*.local
+.env
 !.env.example
 
 # Logs & Debugging
