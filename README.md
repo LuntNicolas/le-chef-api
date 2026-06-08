@@ -1,5 +1,13 @@
 # API for Le Chef
 
+## 🚀 Drizzle
+
+Update Database
+
+```bash
+npx drizzle-kit push
+```
+
 ## 📂 Folder Structure
 
 ```

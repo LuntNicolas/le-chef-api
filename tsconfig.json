@@ -61,11 +61,11 @@
     // Resolves modules using Node’s ESM strategy
   },
   "include": [
-    "src/**/*",
-    "drizzle.config.ts"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "drizzle.config.ts"
   ]
 }

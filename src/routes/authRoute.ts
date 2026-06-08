@@ -1,10 +1,31 @@
 import express from 'express';
 import {sql} from "../config/db.ts";
-import {createUser, getUserByUserId} from "../controllers/authController.ts"
+import {createHousehold, createUser, getUserByUserId} from "../controllers/authController.ts"
+import {getAuth, clerkClient} from "@clerk/express";
 
 const router = express.Router();
 
-router.post("/", createUser)
+router.post("/", createUser);
+
+router.post("/", createHousehold);
+
+router.get('/health', async (req, res) => {
+    const auth = getAuth(req);
+    console.log('auth:', JSON.stringify(auth));
+    if (!auth.isAuthenticated) {
+        return res.status(401).send('User not authenticated')
+    }
+
+    try {
+        const user = await clerkClient.users.getUser(auth.userId);
+        console.log(user.lastName)
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({message: "Internal Server Error"});
+    }
+    return res.json(auth.userId)
+});
+
 
 router.get("/:userId", getUserByUserId)
 
