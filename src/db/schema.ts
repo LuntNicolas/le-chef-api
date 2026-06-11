@@ -17,7 +17,7 @@ export const profilesTable = pgTable("profiles", {
 export const fridgeTable = pgTable("fridge", {
     id: uuid().primaryKey().defaultRandom(),
     household_id: uuid("household_id").references(() => householdsTable.id),
-    added_by: uuid("household_id").references(() => householdsTable.name),
+    added_by: uuid("added_by").references(() => profilesTable.user_id),
     name: varchar({length: 256}).notNull(),
     quantity: integer().notNull(),
     unit: varchar({length: 256}).notNull(),

@@ -2,11 +2,14 @@ import type {Request, Response} from "express";
 import {drizzle} from 'drizzle-orm/neon-http';
 import {getAuth} from "@clerk/express";
 import genAI from "../config/gemini.ts";
-import {fridgeTable} from "../db/schema.ts";
+import openAI from "../config/openai.ts";
+import {fridgeTable, profilesTable} from "../db/schema.ts";
+import {eq, asc} from "drizzle-orm";
 
 const db = drizzle(process.env.DATABASE_URL!);
 
 export const scanFridge = async (req: Request, res: Response) => {
+    const date = new Date();
     const {userId} = getAuth(req);
     if (!userId) {
         return res.status(404).send("No user found with the user id");
@@ -14,37 +17,168 @@ export const scanFridge = async (req: Request, res: Response) => {
     const {image, household_id, user_id} = req.body;
     if (!image) return res.status(400).send("No image provided");
 
+
     try {
-        const response = await genAI.models.generateContent({
-            model: "gemini-3.5-flash",
-            contents: [
+        const response = await openAI.responses.create({
+            model: "gpt-5.4-mini",
+            input: [
                 {
                     role: "user",
-                    parts: [
+                    content: [
                         {
-                            inlineData: {
-                                mimeType: "image/jpeg",
-                                data: image,
-                            }
+                            type: "input_image",
+                            image_url: `data:image/jpeg;base64,${image}`,
+                            detail: "auto"
                         },
                         {
-                            text: "Analyze this fridge image. Return ONLY a JSON array, no markdown, no explanation:"
+                            type: "input_text",
+                            text: `Du bist ein präziser Inventar-Assistent. Analysiere das Bild des Kühlschranks und gib ausschließlich ein valides JSON-Array zurück.
+WICHTIGE REGELN:
+NORMALISIERUNG
+Verwende nur einfache, generische Begriffe.
+Beispiele:
+"Milch" statt "Bio Vollmilch"
+"Joghurt" statt "Griechischer Joghurt"
+"Tomate" statt "Cherrytomaten"
+Keine Markennamen.
+Keine Gewichtsangaben oder Produktvarianten im Namen.
+Der Name darf maximal 15 Zeichen lang sein.
+DUBLETTEN ZUSAMMENFÜHREN
+Identische oder offensichtlich gleiche Produkte müssen zu einem Eintrag zusammengeführt werden.
+Beispiel:
+2 Packungen Milch + 1 weitere Milch = quantity 3
+Mehrere Tomatenpackungen = ein Eintrag "Tomate" mit aufsummierter Menge
+Erzeuge niemals mehrere Objekte mit demselben normalisierten Namen.
+MENGENSCHÄTZUNG
+quantity muss eine Zahl sein.
+Schätze Mengen konservativ.
+Wenn die genaue Menge nicht erkennbar ist, verwende 1.
+EINHEITEN
+Verwende nur sinnvolle Einheiten:
+Stück
+Packung
+Flasche
+Glas
+Dose
+g
+ml
+EMOJIS
+Verwende genau ein passendes Emoji pro Artikel.
+ABLAUFDATUM
+Falls ein Ablaufdatum sichtbar ist, verwende dieses.
+Falls kein Datum erkennbar ist:
+Nutze das heutige Datum + 7 Tage als Standardwert.
+Das Datum muss im Format YYYY-MM-DD ausgegeben werden.
+UNSICHERHEIT
+Wenn ein Produkt nicht eindeutig identifizierbar ist, ignoriere es.
+Niemals raten oder Fantasieprodukte erzeugen.
+AUSGABEFORMAT
+Gib ausschließlich ein valides JSON-Array zurück.
+Keine Markdown-Blöcke.
+Keine Erklärungen.
+Kein zusätzlicher Text.
+Die Antwort muss direkt mit "[" beginnen und mit "]" enden.
+                    `
                         }
                     ]
                 }
             ]
         })
 
-        const raw = response.text ?? "";
+        const raw = response.output_text ?? "";
         const items = JSON.parse(raw);
+
+        console.log(items);
+
+        const [profile] = await db
+            .select()
+            .from(profilesTable)
+            .where(eq(profilesTable.clerk_id, userId))
+            .limit(1);
+
+        if (!profile) return res.status(404).send("Profile not found");
 
         const inserted = await db.insert(fridgeTable).values(
             items.map((item: any) => ({
-                ...item,
-                household_id: household_id,
+                name: item.name,
+                quantity: item.quantity,
+                unit: item.unit,
+                emoji: item.emoji,
+                expires_at: new Date(),
+                household_id: profile.household_id,
+                added_by: profile.user_id,
             }))
         ).returning();
         return res.status(200).send(inserted);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({message: "Internal Server Error"});
+    }
+}
+
+export const addItem = async (req: Request, res: Response) => {
+    const {userId} = getAuth(req);
+    if (!userId) {
+        return res.status(404).send("No user found with the user id");
+    }
+    const {name, quantity, expires_at, unit, emoji} = req.body;
+
+    const [profile] = await db
+        .select()
+        .from(profilesTable)
+        .where(eq(profilesTable.clerk_id, userId))
+
+    if (!profile) return res.status(404).send("Profile not found");
+
+    const insert = await db.insert(fridgeTable).values({
+        household_id: profile.household_id,
+        name: name,
+        quantity: quantity,
+        expires_at: new Date(expires_at),
+        emoji: emoji,
+        unit: unit,
+    }).returning();
+
+    return res.status(200).send(insert);
+}
+
+export const getFridge = async (req: Request, res: Response) => {
+    const {userId} = getAuth(req);
+    if (!userId) {
+        return res.status(404).send("No user found with the user id");
+    }
+
+    try {
+        const [user] = await db.select().from(profilesTable).where(eq(profilesTable.clerk_id, userId));
+
+        if (!user?.household_id) return res.status(400).send("User has no household");
+
+        const food = await db
+            .select()
+            .from(fridgeTable)
+            .where(eq(fridgeTable.household_id, user.household_id))
+            .orderBy(asc(fridgeTable.expires_at));
+
+        res.status(200).send(food);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({message: "Internal Server Error"});
+    }
+}
+
+export const deleteItem = async (req: Request, res: Response) => {
+    const {userId} = getAuth(req);
+    if (!userId) {
+        return res.status(404).send("No user found with the user id");
+    }
+    const id = req.params.id;
+
+    if (typeof id !== 'string') {
+        return res.status(400).json({message: "Invalid ID provided"});
+    }
+    try {
+        await db.delete(fridgeTable).where(eq(fridgeTable.id, id))
+        res.status(200).json({message: "Item deleted"});
     } catch (e) {
         console.error(e);
         res.status(500).json({message: "Internal Server Error"});
