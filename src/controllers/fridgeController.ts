@@ -158,7 +158,6 @@ export const getFridge = async (req: Request, res: Response) => {
             .from(fridgeTable)
             .where(eq(fridgeTable.household_id, user.household_id))
             .orderBy(asc(fridgeTable.expires_at));
-
         res.status(200).send(food);
     } catch (e) {
         console.error(e);

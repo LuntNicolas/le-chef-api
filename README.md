@@ -8,6 +8,14 @@ Update Database
 npx drizzle-kit push
 ```
 
+---
+
+## 🤖 OpenAI
+
+Model: gpt-5.4-mini
+
+---
+
 ## 📂 Folder Structure
 
 ```
