@@ -3,7 +3,7 @@ import {clerkMiddleware} from '@clerk/express'
 import rateLimiter from "./middleware/rateLimiter.ts";
 import authRoute from "./routes/authRoute.ts"
 import fridgeRoute from "./routes/fridgeRoute.ts"
-
+import recipeRoute from "./routes/recipeRoute.ts"
 
 const app = express();
 
@@ -14,6 +14,7 @@ app.use(clerkMiddleware());
 //app.use(rateLimiter);
 app.use("/api/auth", authRoute);
 app.use("/api/fridge", fridgeRoute)
+app.use("/api/recipe", recipeRoute)
 // app.use("/api/protected/fridge")
 
 
