@@ -5,6 +5,7 @@ import genAI from "../config/gemini.ts";
 import openAI from "../config/openai.ts";
 import {fridgeTable, profilesTable} from "../db/schema.ts";
 import {eq, asc} from "drizzle-orm";
+import {normalizeUnit} from "../utils/normalizeUnit.ts";
 
 const db = drizzle(process.env.DATABASE_URL!);
 
@@ -99,16 +100,21 @@ Die Antwort muss direkt mit "[" beginnen und mit "]" enden.
         if (!profile) return res.status(404).send("Profile not found");
 
         const inserted = await db.insert(fridgeTable).values(
-            items.map((item: any) => ({
-                name: item.name,
-                quantity: item.quantity,
-                unit: item.unit,
-                emoji: item.emoji,
-                expires_at: new Date(),
-                household_id: profile.household_id,
-                added_by: profile.user_id,
-            }))
+            items.map((item: any) => {
+                const norm = normalizeUnit(item.name, item.unit, item.quantity);
+                return {
+                    name: item.name,
+                    quantity: norm.quantity,
+                    unit: norm.unit,
+                    unit_type: norm.unit_type,
+                    emoji: item.emoji,
+                    expires_at: new Date(),
+                    household_id: profile.household_id,
+                    added_by: profile.user_id,
+                };
+            })
         ).returning();
+
         return res.status(200).send(inserted);
     } catch (e) {
         console.error(e);
@@ -121,7 +127,7 @@ export const addItem = async (req: Request, res: Response) => {
     if (!userId) {
         return res.status(404).send("No user found with the user id");
     }
-    const {name, quantity, expires_at, unit, emoji} = req.body;
+    const {name, quantity, expires_at, unit, emoji, unit_type} = req.body;
 
     const [profile] = await db
         .select()
@@ -137,6 +143,7 @@ export const addItem = async (req: Request, res: Response) => {
         expires_at: new Date(expires_at),
         emoji: emoji,
         unit: unit,
+        unit_type: unit_type,
     }).returning();
 
     return res.status(200).send(insert);
