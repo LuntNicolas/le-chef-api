@@ -34,6 +34,7 @@ export const generateRecipe = async (req: Request, res: Response) => {
         d.setDate(monday.getDate() + i);
         return d;
     });
+    console.log(weekDates[0], weekDates[6]);
 
     const {userId} = getAuth(req);
     if (!userId) {
@@ -69,6 +70,7 @@ Regeln:
 - Zutaten die bald ablaufen MÜSSEN in Rezepten verwendet werden die so nah wie möglich am heutigen Tag (${today}) liegen.
 - Versuche alle Kühlschrankzutaten im Laufe der Woche zu verbrauchen.
 - Plane so dass am Ende der Woche möglichst wenig im Kühlschrank übrig bleibt.
+- Gib jedem "shopping_ingredient" einen passenden Emoji
 
 EINHEITEN (wähle IMMER nach folgendem Schema):
 - Zählbare Lebensmittel (Eier, Obststücke, Joghurtbecher, Dosen, Flaschen) → "stück"
@@ -94,7 +96,73 @@ Antworte NUR mit einem JSON-Array ohne Markdown-Codeblock oder sonstige Erkläru
     ],
     "duration": 30
   }
-]`
+]
+WICHTIG: JEDES Objekt in "shopping_ingredients" MUSS exakt folgende Struktur besitzen:
+
+{
+  "name": "Parmesan",
+  "quantity": 50,
+  "unit": "g",
+  "unit_type": "weight",
+  "emoji": "🧀"
+}
+
+Erlaubte Werte für "unit":
+- "stück"
+- "g"
+- "ml"
+
+Andere Werte sind VERBOTEN.
+Verwende niemals Werte wie:
+- "bund"
+- "packung"
+- "dose"
+- "becher"
+- "kg"
+- "l"
+
+Stattdessen:
+- Eier, Obst, Gemüse, Joghurtbecher, Dosen, Flaschen → unit = "stück", unit_type = "count"
+- Gewichtsangaben → unit = "g", unit_type = "weight"
+- Flüssigkeiten → unit = "ml", unit_type = "volume"
+
+JEDES shopping_ingredient MUSS die Felder
+- name
+- quantity
+- unit
+- unit_type
+- emoji
+
+enthalten.
+
+Beispiele:
+
+{
+  "name": "Milch",
+  "quantity": 1000,
+  "unit": "ml",
+  "unit_type": "volume",
+  "emoji": "🥛"
+}
+
+{
+  "name": "Parmesan",
+  "quantity": 50,
+  "unit": "g",
+  "unit_type": "weight",
+  "emoji": "🧀"
+}
+
+{
+  "name": "Apfel",
+  "quantity": 2,
+  "unit": "stück",
+  "unit_type": "count",
+  "emoji": "🍎"
+}
+
+Ein shopping_ingredient ohne "unit_type" oder ohne "emoji" ist ungültig.
+Ein anderer Wert als "stück", "g" oder "ml" für "unit" ist ungültig.`
                         }
                     ]
                 }
@@ -135,6 +203,9 @@ Antworte NUR mit einem JSON-Array ohne Markdown-Codeblock oder sonstige Erkläru
                     name: item.name,
                     quantity: item.quantity,
                     unit: item.unit,
+                    unit_type: item.unit_type,
+                    emoji: item.emoji,
+                    expires_at: new Date(),
                 }))
             );
 
@@ -174,6 +245,27 @@ export const getRecipe = async (req: Request, res: Response) => {
             .where(eq(recipesTable.date, date as string));
 
         return res.status(200).json(r);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({message: "Internal Server Error"});
+    }
+}
+
+export const getRecipesById = async (req: Request, res: Response) => {
+    const {userId} = getAuth(req);
+    if (!userId) {
+        return res.status(404).send("No user found with the user id");
+    }
+    try {
+        const {id} = req.params;
+        if (!id) {
+            return res.status(400).json({message: "id required"});
+        }
+
+        const [recipe] = await db
+            .select().from(recipesTable).where(eq(recipesTable.id, id as string));
+        if (!recipe) return res.status(404).send("Recipe not found");
+        return res.status(200).json(recipe);
     } catch (e) {
         console.error(e);
         res.status(500).json({message: "Internal Server Error"});

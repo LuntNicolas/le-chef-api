@@ -50,7 +50,10 @@ export const shoppingTable = pgTable("shopping", {
     household_id: uuid("household_id").references(() => householdsTable.id),
     recipe_id: uuid("recipe_id").references(() => recipesTable.id),
     name: varchar({length: 256}).notNull(),
-    quantity: numeric().notNull(),
-    unit: varchar({length: 50}).notNull(),
+    quantity: numeric({precision: 10, scale: 2, mode: "number"}).notNull(), // statt integer!
+    unit: unitEnum().notNull(),
+    unit_type: unitTypeEnum().notNull(), // redundant, aber praktisch für Queries/Filter
+    emoji: varchar({length: 10}).notNull(),
     purchased: boolean().notNull().default(false),
+    expires_at: timestamp("expires_at"),
 })

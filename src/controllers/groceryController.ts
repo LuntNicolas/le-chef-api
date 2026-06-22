@@ -21,5 +21,23 @@ export const getGroceryItems = async (req: Request, res: Response) => {
         console.error(e);
         res.status(500).json({message: "Internal Server Error"});
     }
+}
 
+export const deleteGroceryItem = async (req: Request, res: Response) => {
+    const {userId} = getAuth(req);
+    if (!userId) {
+        return res.status(404).send("No user found with the user id");
+    }
+    const id = req.params.id
+    if (typeof id !== 'string') {
+        return res.status(400).json({message: "Invalid ID provided"});
+    }
+
+    try {
+        await db.delete(shoppingTable).where(eq(shoppingTable.id, id))
+        res.status(200).json({message: "Item deleted"});
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({message: "Internal Server Error"});
+    }
 }

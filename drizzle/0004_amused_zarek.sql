@@ -1,0 +1,1 @@
+ALTER TABLE "recipes" ADD COLUMN "date" date NOT NULL;

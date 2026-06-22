@@ -1,0 +1,1 @@
+ALTER TABLE "recipes" RENAME COLUMN "date" TO "expires_at";
