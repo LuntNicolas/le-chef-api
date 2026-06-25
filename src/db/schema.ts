@@ -39,11 +39,12 @@ export const recipesTable = pgTable("recipes", {
     household_id: uuid("household_id").references(() => householdsTable.id),
     title: varchar({length: 256}).notNull(),
     meal_type: varchar({length: 50}).notNull(),
-    ingredients: jsonb().notNull(),
+    fridge_ingredient_ids: jsonb().notNull().default([]),    // string[]
+    shopping_ingredient_ids: jsonb().notNull().default([]),  // string[]
     steps: jsonb().notNull(),
     duration: integer().notNull(),
     date: date("date").notNull(),
-    kcal: integer().notNull().default(0)
+    kcal: integer().notNull().default(0),
 })
 
 export const shoppingTable = pgTable("shopping", {

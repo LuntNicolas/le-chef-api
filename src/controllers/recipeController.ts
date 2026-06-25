@@ -3,10 +3,19 @@ import {getAuth} from "@clerk/express";
 import {getFridgeItems} from "../utils/getFridgeItems.ts";
 import openAI from "../config/openai.ts";
 import {db} from "../config/db.ts";
-import {profilesTable, recipesTable, shoppingTable} from "../db/schema.ts";
-import {and, eq} from "drizzle-orm";
+import {fridgeTable, profilesTable, recipesTable, shoppingTable} from "../db/schema.ts";
+import {and, eq, inArray} from "drizzle-orm";
 
 interface ShoppingIngredient {
+    name: string;
+    quantity: number;
+    unit: string;
+    unit_type: string;
+    emoji: string;
+}
+
+interface FridgeIngredient {
+    id: string;
     name: string;
     quantity: number;
     unit: string;
@@ -16,7 +25,7 @@ interface Recipe {
     title: string;
     meal_type: string;
     date: string;
-    fridge_ingredients: { id: string; name: string; quantity: number; unit: string }[];
+    fridge_ingredients: FridgeIngredient[];
     shopping_ingredients: ShoppingIngredient[];
     steps: string[];
     duration: number;
@@ -26,27 +35,30 @@ interface Recipe {
 export const generateRecipe = async (req: Request, res: Response) => {
     const today = new Date();
     const diff = today.getDay() === 0 ? 6 : today.getDay() - 1;
-
     const monday = new Date(today);
     monday.setDate(today.getDate() - diff);
-
     const weekDates = Array.from({length: 7}, (_, i) => {
         const d = new Date(monday);
         d.setDate(monday.getDate() + i);
-        return d;
+        return d.toISOString().split("T")[0];
     });
-    console.log(weekDates[0], weekDates[6]);
 
     const {userId} = getAuth(req);
-    if (!userId) {
-        return res.status(404).send("No user found with the user id");
-    }
+    if (!userId) return res.status(401).send("Unauthorized");
+
     try {
         const fridgeItems = await getFridgeItems(userId);
-        // console.log(fridgeItems?.map(({id, name, quantity, unit}) => ({id, name, quantity, unit})));
+
+        const [profile] = await db
+            .select()
+            .from(profilesTable)
+            .where(eq(profilesTable.clerk_id, userId))
+            .limit(1);
+
+        if (!profile) return res.status(404).send("Profile not found");
 
         const response = await openAI.responses.create({
-            model: "gpt-5.4-mini",
+            model: "gpt-4o-mini",
             input: [
                 {
                     role: "user",
@@ -58,174 +70,91 @@ export const generateRecipe = async (req: Request, res: Response) => {
 ${fridgeItems?.map((item) => `- ID ${item.id}: ${item.name} (${item.quantity} ${item.unit}${item.expires_at ? `, läuft ab: ${item.expires_at}` : ""})`).join("\n")}
 
 Erstelle einen vollständigen Wochenplan von Montag bis Sonntag (${weekDates[0]} bis ${weekDates[6]}).
-Pro Tag genau 3 Mahlzeiten: breakfast, lunch, dinner.
-Das ergibt genau 21 Rezepte.
+Pro Tag genau 3 Mahlzeiten: breakfast, lunch, dinner. Das ergibt genau 21 Rezepte.
 
 Regeln:
-- Zutaten aus dem Kühlschrank haben eine ID — verwende diese exakt.
-- Du darfst auch Zutaten verwenden die NICHT im Kühlschrank sind. Diese kommen in "shopping_ingredients" (keine ID).
-- Gib für jede verwendete Zutat die benötigte Menge ("quantity") und Einheit ("unit") an.
-- Die angegebene quantity einer Kühlschrankzutat darf die verfügbare Menge nicht überschreiten.
-- "date" im Format YYYY-MM-DD, passend zum Wochentag.
-- "meal_type" ist exakt "breakfast", "lunch" oder "dinner".
-- Zutaten die bald ablaufen MÜSSEN in Rezepten verwendet werden die so nah wie möglich am heutigen Tag (${today}) liegen.
-- Versuche alle Kühlschrankzutaten im Laufe der Woche zu verbrauchen.
-- Plane so dass am Ende der Woche möglichst wenig im Kühlschrank übrig bleibt.
-- Gib jedem "shopping_ingredient" einen passenden Emoji
+- Kühlschrank-Zutaten haben eine ID — verwende diese exakt in "fridge_ingredients".
+- Fehlende Zutaten kommen in "shopping_ingredients" (keine ID nötig).
+- Zutaten die bald ablaufen MÜSSEN früh in der Woche verwendet werden.
+- "date" im Format YYYY-MM-DD. "meal_type" ist exakt "breakfast", "lunch" oder "dinner".
+- Schätze realistische Kalorien pro Rezept für 2 Personen.
 
-EINHEITEN (wähle IMMER nach folgendem Schema):
-- Zählbare Lebensmittel (Eier, Obststücke, Joghurtbecher, Dosen, Flaschen) → "stück"
-- Lebensmittel die nach Gewicht verkauft werden (Mehl, Zucker, Reis, Käse, Fleisch) → "g"
-- Flüssigkeiten (Milch, Öl, Saft) → "ml"
+EINHEITEN: nur "stück", "g" oder "ml" erlaubt.
+- Zählbares → "stück", unit_type: "count"
+- Gewicht → "g", unit_type: "weight"
+- Flüssigkeit → "ml", unit_type: "volume"
 
-Gib zusätzlich zu jedem Artikel ein Feld "unit_type" zurück: "count" | "weight" | "volume"
-
-Antworte NUR mit einem JSON-Array ohne Markdown-Codeblock oder sonstige Erklärungen:
+Antworte NUR mit einem JSON-Array ohne Markdown oder Erklärungen:
 [
   {
     "title": "Rezeptname",
     "meal_type": "breakfast",
-    "date": "2026-06-16",
+    "date": "2026-06-23",
+    "kcal": 380,
+    "duration": 15,
     "fridge_ingredients": [
-      { "id": "uuid-hier", "name": "Zutat1", "quantity": 2, "unit": "Stück" }
+      { "id": "uuid-aus-kühlschrank", "name": "Ei", "quantity": 2, "unit": "stück" }
     ],
     "shopping_ingredients": [
-      { "name": "Parmesan", "quantity": 50, "unit": "g" }
+      { "name": "Parmesan", "quantity": 50, "unit": "g", "unit_type": "weight", "emoji": "🧀" }
     ],
-    "steps": [
-      "Schritt 1: ..."
-    ],
-    "duration": 30,
-    "kcal": 380
+    "steps": ["Schritt 1: ..."]
   }
 ]
-WICHTIG: JEDES Objekt in "shopping_ingredients" MUSS exakt folgende Struktur besitzen:
 
-{
-  "name": "Parmesan",
-  "quantity": 50,
-  "unit": "g",
-  "unit_type": "weight",
-  "emoji": "🧀"
-}
-
-Erlaubte Werte für "unit":
-- "stück"
-- "g"
-- "ml"
-
-Andere Werte sind VERBOTEN.
-Verwende niemals Werte wie:
-- "bund"
-- "packung"
-- "dose"
-- "becher"
-- "kg"
-- "l"
-
-Stattdessen:
-- Eier, Obst, Gemüse, Joghurtbecher, Dosen, Flaschen → unit = "stück", unit_type = "count"
-- Gewichtsangaben → unit = "g", unit_type = "weight"
-- Flüssigkeiten → unit = "ml", unit_type = "volume"
-
-JEDES shopping_ingredient MUSS die Felder
-- name
-- quantity
-- unit
-- unit_type
-- emoji
-
-enthalten.
-
-Beispiele:
-
-{
-  "name": "Milch",
-  "quantity": 1000,
-  "unit": "ml",
-  "unit_type": "volume",
-  "emoji": "🥛"
-}
-
-{
-  "name": "Parmesan",
-  "quantity": 50,
-  "unit": "g",
-  "unit_type": "weight",
-  "emoji": "🧀"
-}
-
-{
-  "name": "Apfel",
-  "quantity": 2,
-  "unit": "stück",
-  "unit_type": "count",
-  "emoji": "🍎"
-}
-
-Ein shopping_ingredient ohne "unit_type" oder ohne "emoji" ist ungültig.
-Ein anderer Wert als "stück", "g" oder "ml" für "unit" ist ungültig.`
+JEDES shopping_ingredient MUSS enthalten: name, quantity, unit, unit_type, emoji.
+Erlaubte unit-Werte: "stück", "g", "ml" — keine anderen.`
                         }
                     ]
                 }
             ]
-        })
+        });
+
         const raw = response.output_text ?? "";
-        const recipes = JSON.parse(raw);
+        const recipes: Recipe[] = JSON.parse(raw);
 
-        const [profile] = await db
-            .select()
-            .from(profilesTable)
-            .where(eq(profilesTable.clerk_id, userId))
-            .limit(1);
-
-        if (!profile) return res.status(404).send("Profile not found");
-
-        const allShoppingWithIndex = recipes.flatMap((recipe: Recipe) =>
-            (recipe.shopping_ingredients ?? []).map((item) => ({...item}))
+        // 1. Shopping-Items pro Rezept inserten mit recipe-Index tracking
+        const recipeShoppingMap = recipes.flatMap((recipe, i) =>
+            (recipe.shopping_ingredients ?? []).map((item) => ({recipeIndex: i, item}))
         );
 
-        const aggregatedShopping = allShoppingWithIndex.reduce((acc: any[], item: any) => {
-            const existing = acc.find(
-                (i) => i.name.toLowerCase() === item.name.toLowerCase() && i.unit === item.unit
-            );
-            if (existing) {
-                existing.quantity += item.quantity;
-            } else {
-                acc.push({...item});
-            }
-            return acc;
-        }, []);
-
-        await db
-            .insert(shoppingTable)
-            .values(
-                aggregatedShopping.map((item: any) => ({
+        const insertedShopping = recipeShoppingMap.length > 0
+            ? await db.insert(shoppingTable).values(
+                recipeShoppingMap.map(({item}) => ({
                     household_id: profile.household_id,
                     name: item.name,
                     quantity: item.quantity,
-                    unit: item.unit,
-                    unit_type: item.unit_type,
+                    unit: item.unit as "stück" | "g" | "ml",
+                    unit_type: item.unit_type as "count" | "weight" | "volume",
                     emoji: item.emoji,
                     expires_at: new Date(),
                 }))
-            );
+            ).returning()
+            : [];
 
+        // 2. Shopping-IDs pro Rezept gruppieren
+        const shoppingIdsByRecipe: Record<number, string[]> = {};
+        recipeShoppingMap.forEach(({recipeIndex}, i) => {
+            if (!shoppingIdsByRecipe[recipeIndex]) shoppingIdsByRecipe[recipeIndex] = [];
+            shoppingIdsByRecipe[recipeIndex]!.push(insertedShopping[i]!.id);
+        });
+
+        // 3. Rezepte mit beiden ID-Arrays inserten
         await db.insert(recipesTable).values(
-            recipes.map((recipe: Recipe) => ({
+            recipes.map((recipe, i) => ({
                 household_id: profile.household_id,
                 title: recipe.title,
                 meal_type: recipe.meal_type,
                 date: recipe.date,
-                ingredients: recipe.fridge_ingredients ?? [],
-                steps: recipe.steps,
+                kcal: recipe.kcal ?? 0,
                 duration: recipe.duration,
-                kcal: recipe.kcal,
+                steps: recipe.steps,
+                fridge_ingredient_ids: (recipe.fridge_ingredients ?? []).map((f) => f.id),
+                shopping_ingredient_ids: shoppingIdsByRecipe[i] ?? [],
             }))
         );
 
         res.status(200).send();
-
     } catch (e) {
         console.error(e);
         res.status(500).json({message: "Internal Server Error"});
@@ -234,9 +163,8 @@ Ein anderer Wert als "stück", "g" oder "ml" für "unit" ist ungültig.`
 
 export const getRecipe = async (req: Request, res: Response) => {
     const {userId} = getAuth(req);
-    if (!userId) {
-        return res.status(404).send("No user found with the user id");
-    }
+    if (!userId) return res.status(401).send("Unauthorized");
+
     try {
         const {date} = req.query;
         if (!date || date === "undefined") {
@@ -251,17 +179,17 @@ export const getRecipe = async (req: Request, res: Response) => {
 
         if (!profile?.household_id) return res.status(400).json({message: "No household found"});
 
-        const r = await db
+        const recipes = await db
             .select()
             .from(recipesTable)
             .where(
                 and(
                     eq(recipesTable.date, date as string),
-                    eq(recipesTable.household_id, profile?.household_id)
+                    eq(recipesTable.household_id, profile.household_id)
                 )
             );
 
-        return res.status(200).json(r);
+        return res.status(200).json(recipes);
     } catch (e) {
         console.error(e);
         res.status(500).json({message: "Internal Server Error"});
@@ -270,19 +198,37 @@ export const getRecipe = async (req: Request, res: Response) => {
 
 export const getRecipesById = async (req: Request, res: Response) => {
     const {userId} = getAuth(req);
-    if (!userId) {
-        return res.status(404).send("No user found with the user id");
-    }
+    if (!userId) return res.status(401).send("Unauthorized");
+
     try {
         const {id} = req.params;
-        if (!id) {
-            return res.status(400).json({message: "id required"});
-        }
+        if (!id || typeof id !== "string") return res.status(400).json({message: "id required"});
+
 
         const [recipe] = await db
-            .select().from(recipesTable).where(eq(recipesTable.id, id as string));
+            .select()
+            .from(recipesTable)
+            .where(eq(recipesTable.id, id));
+
         if (!recipe) return res.status(404).send("Recipe not found");
-        return res.status(200).json(recipe);
+
+        const fridgeIds = (recipe.fridge_ingredient_ids as string[]) ?? [];
+        const shoppingIds = (recipe.shopping_ingredient_ids as string[]) ?? [];
+
+        const [fridgeItems, shoppingItems] = await Promise.all([
+            fridgeIds.length > 0
+                ? db.select().from(fridgeTable).where(inArray(fridgeTable.id, fridgeIds))
+                : Promise.resolve([]),
+            shoppingIds.length > 0
+                ? db.select().from(shoppingTable).where(inArray(shoppingTable.id, shoppingIds))
+                : Promise.resolve([]),
+        ]);
+
+        return res.status(200).json({
+            ...recipe,
+            fridge_ingredients: fridgeItems,
+            shopping_ingredients: shoppingItems,
+        });
     } catch (e) {
         console.error(e);
         res.status(500).json({message: "Internal Server Error"});
