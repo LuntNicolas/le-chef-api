@@ -20,6 +20,7 @@ interface Recipe {
     shopping_ingredients: ShoppingIngredient[];
     steps: string[];
     duration: number;
+    kcal: number;
 }
 
 export const generateRecipe = async (req: Request, res: Response) => {
@@ -94,7 +95,8 @@ Antworte NUR mit einem JSON-Array ohne Markdown-Codeblock oder sonstige Erkläru
     "steps": [
       "Schritt 1: ..."
     ],
-    "duration": 30
+    "duration": 30,
+    "kcal": 380
   }
 ]
 WICHTIG: JEDES Objekt in "shopping_ingredients" MUSS exakt folgende Struktur besitzen:
@@ -218,6 +220,7 @@ Ein anderer Wert als "stück", "g" oder "ml" für "unit" ist ungültig.`
                 ingredients: recipe.fridge_ingredients ?? [],
                 steps: recipe.steps,
                 duration: recipe.duration,
+                kcal: recipe.kcal,
             }))
         );
 
