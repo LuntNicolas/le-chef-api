@@ -43,6 +43,7 @@ export const recipesTable = pgTable("recipes", {
     steps: jsonb().notNull(),
     duration: integer().notNull(),
     date: date("date").notNull(),
+    kcal: integer().notNull().default(0)
 })
 
 export const shoppingTable = pgTable("shopping", {
