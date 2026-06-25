@@ -4,7 +4,7 @@ import {getFridgeItems} from "../utils/getFridgeItems.ts";
 import openAI from "../config/openai.ts";
 import {db} from "../config/db.ts";
 import {profilesTable, recipesTable, shoppingTable} from "../db/schema.ts";
-import {eq} from "drizzle-orm";
+import {and, eq} from "drizzle-orm";
 
 interface ShoppingIngredient {
     name: string;
@@ -239,10 +239,24 @@ export const getRecipe = async (req: Request, res: Response) => {
         if (!date || date === "undefined") {
             return res.status(400).json({message: "date required"});
         }
+
+        const [profile] = await db
+            .select()
+            .from(profilesTable)
+            .where(eq(profilesTable.clerk_id, userId))
+            .limit(1);
+
+        if (!profile?.household_id) return res.status(400).json({message: "No household found"});
+
         const r = await db
             .select()
             .from(recipesTable)
-            .where(eq(recipesTable.date, date as string));
+            .where(
+                and(
+                    eq(recipesTable.date, date as string),
+                    eq(recipesTable.household_id, profile?.household_id)
+                )
+            );
 
         return res.status(200).json(r);
     } catch (e) {
