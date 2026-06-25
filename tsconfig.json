@@ -34,7 +34,6 @@
     "rewriteRelativeImportExtensions": true,
     "noImplicitAny": true,
     // Prevents the use of `any` type unless explicitly defined
-    "allowImportingTsExtensions": true,
     // Allows importing `.ts` files with their extensions
     // "noUnusedLocals": true,
     // "noUnusedParameters": true,
@@ -43,7 +42,6 @@
 
     // Recommended Options
     "strict": true,
-    "jsx": "react-jsx",
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
