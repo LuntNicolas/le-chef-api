@@ -6,6 +6,10 @@ import openAI from "../config/openai.ts";
 import {fridgeTable, profilesTable} from "../db/schema.ts";
 import {eq, asc} from "drizzle-orm";
 import {normalizeUnit} from "../utils/normalizeUnit.ts";
+import {deductAmount} from "../utils/deductAmount.ts";
+import {unitEnum} from "../db/schema.ts";
+
+type UnitEnumValue = typeof unitEnum.enumValues[number];
 
 const db = drizzle(process.env.DATABASE_URL!);
 
@@ -185,6 +189,49 @@ export const deleteItem = async (req: Request, res: Response) => {
     try {
         await db.delete(fridgeTable).where(eq(fridgeTable.id, id))
         res.status(200).json({message: "Item deleted"});
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({message: "Internal Server Error"});
+    }
+}
+
+export const deductItem = async (req: Request, res: Response) => {
+    const {userId} = getAuth(req);
+    if (!userId) return res.status(401).send("Unauthorized");
+
+    const id = req.params.id;
+    const {quantity, unit} = req.body as { quantity: number; unit: string };
+
+    if (!id || typeof id !== "string") {
+        return res.status(400).json({message: "Invalid ID"});
+    }
+
+    try {
+        const [item] = await db
+            .select()
+            .from(fridgeTable)
+            .where(eq(fridgeTable.id, id));
+
+        if (!item) return res.status(404).json({message: "Item not found"});
+
+        const result = deductAmount(item.quantity, item.unit, quantity, unit);
+
+        if (!result) {
+            return res.status(400).json({message: "Incompatible units"});
+        }
+
+        if (result.remaining <= 0) {
+            await db.delete(fridgeTable).where(eq(fridgeTable.id, id));
+        } else {
+            await db.update(fridgeTable)
+                .set({
+                    quantity: result.remaining,
+                    unit: result.unit as UnitEnumValue
+                })
+                .where(eq(fridgeTable.id, id));
+        }
+
+        res.status(200).json({remaining: Math.max(result.remaining, 0), unit: result.unit});
     } catch (e) {
         console.error(e);
         res.status(500).json({message: "Internal Server Error"});
