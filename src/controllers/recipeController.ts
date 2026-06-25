@@ -113,7 +113,9 @@ Erlaubte unit-Werte: "stück", "g", "ml" — keine anderen.`
         const raw = response.output_text ?? "";
         const recipes: Recipe[] = JSON.parse(raw);
 
-        // 1. Shopping-Items pro Rezept inserten mit recipe-Index tracking
+        console.log("Erstes Rezept shopping_ingredients:", JSON.stringify(recipes[0]?.shopping_ingredients, null, 2));
+        console.log("Anzahl Rezepte:", recipes.length);
+
         const recipeShoppingMap = recipes.flatMap((recipe, i) =>
             (recipe.shopping_ingredients ?? []).map((item) => ({recipeIndex: i, item}))
         );
@@ -132,14 +134,16 @@ Erlaubte unit-Werte: "stück", "g", "ml" — keine anderen.`
             ).returning()
             : [];
 
-        // 2. Shopping-IDs pro Rezept gruppieren
+
         const shoppingIdsByRecipe: Record<number, string[]> = {};
         recipeShoppingMap.forEach(({recipeIndex}, i) => {
             if (!shoppingIdsByRecipe[recipeIndex]) shoppingIdsByRecipe[recipeIndex] = [];
             shoppingIdsByRecipe[recipeIndex]!.push(insertedShopping[i]!.id);
         });
 
-        // 3. Rezepte mit beiden ID-Arrays inserten
+        console.log("insertedShopping count:", insertedShopping.length);
+        console.log("shoppingIdsByRecipe:", JSON.stringify(shoppingIdsByRecipe, null, 2));
+        
         await db.insert(recipesTable).values(
             recipes.map((recipe, i) => ({
                 household_id: profile.household_id,
