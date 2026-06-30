@@ -3,8 +3,8 @@ import {drizzle} from 'drizzle-orm/neon-http';
 import {getAuth} from "@clerk/express";
 import genAI from "../config/gemini.ts";
 import openAI from "../config/openai.ts";
-import {fridgeTable, profilesTable} from "../db/schema.ts";
-import {eq, asc} from "drizzle-orm";
+import {fridgeTable, profilesTable, recipesTable} from "../db/schema.ts";
+import {eq, asc, sql} from "drizzle-orm";
 import {normalizeUnit} from "../utils/normalizeUnit.ts";
 import {deductAmount} from "../utils/deductAmount.ts";
 import {unitEnum} from "../db/schema.ts";
@@ -131,7 +131,7 @@ export const addItem = async (req: Request, res: Response) => {
     if (!userId) {
         return res.status(404).send("No user found with the user id");
     }
-    const {name, quantity, expires_at, unit, emoji, unit_type} = req.body;
+    const {id, household_id, name, quantity, expires_at, unit, emoji, unit_type} = req.body;
 
     const [profile] = await db
         .select()
@@ -139,6 +139,34 @@ export const addItem = async (req: Request, res: Response) => {
         .where(eq(profilesTable.clerk_id, userId))
 
     if (!profile) return res.status(404).send("Profile not found");
+
+    if (!profile.household_id || typeof profile.household_id !== "string") return res.status(400).json({message: "id required"});
+
+    const recipes = await db
+        .select()
+        .from(recipesTable)
+        .where(eq(recipesTable.household_id, profile.household_id));
+
+    const recipe = recipes.find((r) =>
+        (r.shopping_ingredient_ids as string[]).includes(id)
+    );
+
+    if (recipe) {
+        const updatedShoppingIds = (recipe.shopping_ingredient_ids as string[])
+            .filter((sid) => sid !== id);
+        const updatedFridgeIds = [
+            ...(recipe.fridge_ingredient_ids as string[]),
+            id,
+        ];
+
+        await db.update(recipesTable)
+            .set({
+                shopping_ingredient_ids: updatedShoppingIds,
+                fridge_ingredient_ids: updatedFridgeIds,
+            })
+            .where(eq(recipesTable.id, recipe.id));
+    }
+
 
     const insert = await db.insert(fridgeTable).values({
         household_id: profile.household_id,
