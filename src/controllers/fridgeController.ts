@@ -152,19 +152,25 @@ export const addItem = async (req: Request, res: Response) => {
     );
 
     if (recipe) {
-        const updatedShoppingIds = (recipe.shopping_ingredient_ids as string[])
-            .filter((sid) => sid !== id);
         const updatedFridgeIds = [
             ...(recipe.fridge_ingredient_ids as string[]),
             id,
         ];
+        const updatedShoppingIds = (recipe.shopping_ingredient_ids as string[])
+            .filter((sid) => sid !== id);
 
-        await db.update(recipesTable)
+        console.log("VORHER fridge_ingredient_ids:", recipe.fridge_ingredient_ids);
+        console.log("NEU updatedFridgeIds:", updatedFridgeIds);
+
+
+        const result = await db.update(recipesTable)
             .set({
-                shopping_ingredient_ids: updatedShoppingIds,
                 fridge_ingredient_ids: updatedFridgeIds,
+                shopping_ingredient_ids: updatedShoppingIds,
             })
-            .where(eq(recipesTable.id, recipe.id));
+            .where(eq(recipesTable.id, recipe.id)).returning();
+        
+        console.log("NACHHER (returning):", result[0]?.fridge_ingredient_ids);
     }
 
 
