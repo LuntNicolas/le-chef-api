@@ -178,6 +178,7 @@ export const addItem = async (req: Request, res: Response) => {
 
 
     const insert = await db.insert(fridgeTable).values({
+        id: id,
         household_id: profile.household_id,
         name: name,
         quantity: quantity,
