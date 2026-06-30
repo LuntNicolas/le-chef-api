@@ -19,9 +19,9 @@ export const scanFridge = async (req: Request, res: Response) => {
     if (!userId) {
         return res.status(404).send("No user found with the user id");
     }
+
     const {image, household_id, user_id} = req.body;
     if (!image) return res.status(400).send("No image provided");
-
 
     try {
         const response = await openAI.responses.create({
