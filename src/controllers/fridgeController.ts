@@ -15,6 +15,10 @@ const db = drizzle(process.env.DATABASE_URL!);
 
 export const scanFridge = async (req: Request, res: Response) => {
     const date = new Date();
+    let day = date.getDate();
+    let month = date.getMonth() + 1;
+    let year = date.getFullYear();
+    let currentDate = `${day}-${month}-${year}`;
     const {userId} = getAuth(req);
     if (!userId) {
         return res.status(404).send("No user found with the user id");
@@ -72,7 +76,7 @@ Verwende genau ein passendes Emoji pro Artikel.
 ABLAUFDATUM
 Falls ein Ablaufdatum sichtbar ist, verwende dieses.
 Falls kein Datum erkennbar ist:
-Nutze das heutige Datum + 7 Tage als Standardwert.
+Nutze das heutige Datum (${currentDate}) + 7 Tage als Standardwert.
 Das Datum muss im Format YYYY-MM-DD ausgegeben werden.
 UNSICHERHEIT
 Wenn ein Produkt nicht eindeutig identifizierbar ist, ignoriere es.

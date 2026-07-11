@@ -23,6 +23,54 @@ export const getUserByUserId = async (req: Request, res: Response) => {
     }
 }
 
+export const getMe = async (req: Request, res: Response) => {
+    const {userId} = getAuth(req);
+    if (!userId) {
+        return res.status(401).send('User not authenticated')
+    }
+    try {
+        const [profile] = await db
+            .select()
+            .from(profilesTable)
+            .where(eq(profilesTable.clerk_id, userId))
+            .limit(1);
+
+        if (!profile) {
+            return res.status(404).json({message: "Profile not found"});
+        }
+        res.status(200).json(profile);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({message: "Internal Server Error"});
+    }
+}
+
+export const updatePrefs = async (req: Request, res: Response) => {
+    const {userId} = getAuth(req);
+    if (!userId) {
+        return res.status(401).send('User not authenticated')
+    }
+    const {dietary_prefs} = req.body;
+    if (!Array.isArray(dietary_prefs) || dietary_prefs.some((p) => typeof p !== "string")) {
+        return res.status(400).json({message: "dietary_prefs must be an array of strings"});
+    }
+    try {
+        const [updated] = await db
+            .update(profilesTable)
+            .set({dietary_prefs})
+            .where(eq(profilesTable.clerk_id, userId))
+            .returning();
+
+        if (!updated) {
+            return res.status(404).json({message: "Profile not found"});
+        }
+        res.status(200).json(updated);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({message: "Internal Server Error"});
+    }
+}
+
 export const createUser = async (req: Request, res: Response) => {
     try {
         const {userId: clerk_id} = getAuth(req);
@@ -34,7 +82,10 @@ export const createUser = async (req: Request, res: Response) => {
             return res.status(400).send('Last name is required');
         }
 
-        const {dietary_prefs} = req.body;
+        const {dietary_prefs, household_size} = req.body;
+
+        const size = Number(household_size);
+        const validSize = Number.isInteger(size) && size >= 1 && size <= 12 ? size : 2;
 
         const [household] = await db.insert(householdsTable).values({
             name: `${user.firstName} ${user.lastName}`,
@@ -48,6 +99,7 @@ export const createUser = async (req: Request, res: Response) => {
             clerk_id,
             household_id: household.id,
             dietary_prefs: dietary_prefs ?? [],
+            household_size: validSize,
         }).returning();
 
 

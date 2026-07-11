@@ -64,6 +64,20 @@
       "when": 1782416468512,
       "tag": "0008_mushy_norman_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782940021401,
+      "tag": "0009_cute_magus",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783580072739,
+      "tag": "0010_large_alex_power",
+      "breakpoints": true
     }
   ]
 }

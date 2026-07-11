@@ -1,6 +1,6 @@
 import express from 'express';
 import {sql} from "../config/db.ts";
-import {createHousehold, createUser, getUserByUserId} from "../controllers/authController.ts"
+import {createHousehold, createUser, getMe, getUserByUserId, updatePrefs} from "../controllers/authController.ts"
 import {getAuth, clerkClient} from "@clerk/express";
 
 const router = express.Router();
@@ -26,6 +26,10 @@ router.get('/health', async (req, res) => {
     return res.json(auth.userId)
 });
 
+
+router.get("/me", getMe);
+
+router.patch("/me", updatePrefs);
 
 router.get("/:userId", getUserByUserId)
 
