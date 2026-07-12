@@ -99,6 +99,7 @@ export const createUser = async (req: Request, res: Response) => {
             clerk_id,
             household_id: household.id,
             dietary_prefs: dietary_prefs ?? [],
+            household_size: validSize,
         }).returning();
 
 

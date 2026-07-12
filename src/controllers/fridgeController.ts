@@ -4,7 +4,7 @@ import {getAuth} from "@clerk/express";
 import genAI from "../config/gemini.ts";
 import openAI from "../config/openai.ts";
 import {fridgeTable, profilesTable, recipesTable} from "../db/schema.ts";
-import {eq, asc, sql} from "drizzle-orm";
+import {eq, asc} from "drizzle-orm";
 import {normalizeUnit} from "../utils/normalizeUnit.ts";
 import {deductAmount} from "../utils/deductAmount.ts";
 import {unitEnum} from "../db/schema.ts";
@@ -12,6 +12,30 @@ import {unitEnum} from "../db/schema.ts";
 type UnitEnumValue = typeof unitEnum.enumValues[number];
 
 const db = drizzle(process.env.DATABASE_URL!);
+
+// enforced via OpenAI structured outputs — guarantees syntactically valid JSON
+const SCAN_SCHEMA = {
+    type: "object",
+    additionalProperties: false,
+    required: ["items"],
+    properties: {
+        items: {
+            type: "array",
+            items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["name", "quantity", "unit", "emoji", "expires_at"],
+                properties: {
+                    name: {type: "string", description: "generic name, max 15 chars, no brands"},
+                    quantity: {type: "number"},
+                    unit: {type: "string", enum: ["stück", "packung", "flasche", "glas", "dose", "g", "ml"]},
+                    emoji: {type: "string", description: "exactly one fitting emoji"},
+                    expires_at: {type: "string", description: "YYYY-MM-DD"},
+                },
+            },
+        },
+    },
+};
 
 export const scanFridge = async (req: Request, res: Response) => {
     const date = new Date();
@@ -81,23 +105,40 @@ Das Datum muss im Format YYYY-MM-DD ausgegeben werden.
 UNSICHERHEIT
 Wenn ein Produkt nicht eindeutig identifizierbar ist, ignoriere es.
 Niemals raten oder Fantasieprodukte erzeugen.
-AUSGABEFORMAT
-Gib ausschließlich ein valides JSON-Array zurück.
-Keine Markdown-Blöcke.
-Keine Erklärungen.
-Kein zusätzlicher Text.
-Die Antwort muss direkt mit "[" beginnen und mit "]" enden.
+Gib alle erkannten Artikel im Feld "items" zurück.
                     `
                         }
                     ]
                 }
-            ]
+            ],
+            max_output_tokens: 8000,
+            text: {
+                format: {
+                    type: "json_schema",
+                    name: "fridge_scan",
+                    strict: true,
+                    schema: SCAN_SCHEMA,
+                },
+            },
         })
 
-        const raw = response.output_text ?? "";
-        const items = JSON.parse(raw);
+        // a truncated response (token limit) is reported here instead of surfacing as broken JSON
+        if (response.status !== "completed") {
+            console.error("Fridge scan incomplete:", response.status, response.incomplete_details);
+            return res.status(502).json({message: "Scan was cut off — please try again"});
+        }
 
-        console.log(items);
+        let items: any[];
+        try {
+            items = JSON.parse(response.output_text ?? "").items ?? [];
+        } catch (e) {
+            console.error("Model returned invalid JSON:", (response.output_text ?? "").slice(0, 300));
+            return res.status(502).json({message: "Invalid response from scanner — please try again"});
+        }
+
+        if (items.length === 0) {
+            return res.status(200).send([]);
+        }
 
         const [profile] = await db
             .select()
@@ -107,16 +148,19 @@ Die Antwort muss direkt mit "[" beginnen und mit "]" enden.
 
         if (!profile) return res.status(404).send("Profile not found");
 
+        const fallbackExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
         const inserted = await db.insert(fridgeTable).values(
             items.map((item: any) => {
                 const norm = normalizeUnit(item.name, item.unit, item.quantity);
+                const parsedExpiry = new Date(item.expires_at);
                 return {
                     name: item.name,
                     quantity: norm.quantity,
-                    unit: norm.unit,
+                    unit: norm.unit as UnitEnumValue,
                     unit_type: norm.unit_type,
                     emoji: item.emoji,
-                    expires_at: new Date(),
+                    expires_at: isNaN(parsedExpiry.getTime()) ? fallbackExpiry : parsedExpiry,
                     household_id: profile.household_id,
                     added_by: profile.user_id,
                 };

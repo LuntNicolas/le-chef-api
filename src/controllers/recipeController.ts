@@ -36,14 +36,68 @@ interface Recipe {
     kcal: number;
 }
 
+// JSON schema enforced via OpenAI structured outputs — the model cannot return
+// markdown fences or malformed JSON, only a syntactically valid week plan.
+const WEEK_PLAN_SCHEMA = {
+    type: "object",
+    additionalProperties: false,
+    required: ["recipes"],
+    properties: {
+        recipes: {
+            type: "array",
+            items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["title", "meal_type", "date", "kcal", "duration", "fridge_ingredients", "shopping_ingredients", "steps"],
+                properties: {
+                    title: {type: "string"},
+                    meal_type: {type: "string", enum: ["breakfast", "lunch", "dinner"]},
+                    date: {type: "string", description: "YYYY-MM-DD"},
+                    kcal: {type: "integer"},
+                    duration: {type: "integer", description: "minutes"},
+                    fridge_ingredients: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            additionalProperties: false,
+                            required: ["id", "name", "quantity", "unit"],
+                            properties: {
+                                id: {type: "string", description: "exact fridge item UUID from the prompt"},
+                                name: {type: "string"},
+                                quantity: {type: "number"},
+                                unit: {type: "string", enum: ["stück", "g", "ml"]},
+                            },
+                        },
+                    },
+                    shopping_ingredients: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            additionalProperties: false,
+                            required: ["name", "quantity", "unit", "unit_type", "emoji"],
+                            properties: {
+                                name: {type: "string"},
+                                quantity: {type: "number"},
+                                unit: {type: "string", enum: ["stück", "g", "ml"]},
+                                unit_type: {type: "string", enum: ["count", "weight", "volume"]},
+                                emoji: {type: "string"},
+                            },
+                        },
+                    },
+                    steps: {type: "array", items: {type: "string"}},
+                },
+            },
+        },
+    },
+};
+
 export const generateRecipe = async (req: Request, res: Response) => {
+    // plan the next 7 days starting today — anchoring to Monday meant a plan
+    // generated on the weekend was already in the past and never showed in the app
     const today = new Date();
-    const diff = today.getDay() === 0 ? 6 : today.getDay() - 1;
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - diff);
     const weekDates = Array.from({length: 7}, (_, i) => {
-        const d = new Date(monday);
-        d.setDate(monday.getDate() + i);
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
         return d.toISOString().split("T")[0];
     });
 
@@ -61,7 +115,7 @@ export const generateRecipe = async (req: Request, res: Response) => {
 
         if (!profile) return res.status(404).send("Profile not found");
 
-        const householdSize = profile.household_id?.length;
+        const householdSize = profile.household_size ?? 2;
         const dietaryPrefs = Array.isArray(profile.dietary_prefs) ? profile.dietary_prefs as string[] : [];
         const dietaryLine = dietaryPrefs.length > 0
             ? `\nWICHTIG — Ernährungsvorgaben des Haushalts (MÜSSEN in JEDEM Rezept eingehalten werden): ${dietaryPrefs.join(", ")}.`
@@ -80,14 +134,14 @@ Dir stehen folgende Zutaten im Kühlschrank zur Verfügung (jede mit eindeutiger
 
 ${fridgeItems?.map((item) => `- ID ${item.id}: ${item.name} (${item.quantity} ${item.unit}${item.expires_at ? `, läuft ab: ${item.expires_at}` : ""})`).join("\n")}
 
-Erstelle einen vollständigen Wochenplan von Montag bis Sonntag (${weekDates[0]} bis ${weekDates[6]}).
+Erstelle einen vollständigen Plan für die nächsten 7 Tage (${weekDates[0]} bis ${weekDates[6]}).
 Pro Tag genau 3 Mahlzeiten: breakfast, lunch, dinner. Das ergibt genau 21 Rezepte.
 
 Regeln:
 - Kühlschrank-Zutaten haben eine ID — verwende diese exakt in "fridge_ingredients".
 - Fehlende Zutaten kommen in "shopping_ingredients" (keine ID nötig).
-- Zutaten die bald ablaufen MÜSSEN früh in der Woche verwendet werden.
-- "date" im Format YYYY-MM-DD. "meal_type" ist exakt "breakfast", "lunch" oder "dinner".
+- Zutaten die bald ablaufen MÜSSEN an den ersten Tagen verwendet werden.
+- Verwende als "date" ausschließlich diese Werte: ${weekDates.join(", ")}. Format YYYY-MM-DD. "meal_type" ist exakt "breakfast", "lunch" oder "dinner".
 - Mengen und Kalorien beziehen sich auf ${householdSize} ${householdSize === 1 ? "Person" : "Personen"} — schätze realistisch.
 
 EINHEITEN: nur "stück", "g" oder "ml" erlaubt.
@@ -95,36 +149,41 @@ EINHEITEN: nur "stück", "g" oder "ml" erlaubt.
 - Gewicht → "g", unit_type: "weight"
 - Flüssigkeit → "ml", unit_type: "volume"
 
-Antworte NUR mit einem JSON-Array ohne Markdown oder Erklärungen:
-[
-  {
-    "title": "Rezeptname",
-    "meal_type": "breakfast",
-    "date": "2026-06-23",
-    "kcal": 380,
-    "duration": 15,
-    "fridge_ingredients": [
-      { "id": "uuid-aus-kühlschrank", "name": "Ei", "quantity": 2, "unit": "stück" }
-    ],
-    "shopping_ingredients": [
-      { "name": "Parmesan", "quantity": 50, "unit": "g", "unit_type": "weight", "emoji": "🧀" }
-    ],
-    "steps": ["Schritt 1: ..."]
-  }
-]
-
-JEDES shopping_ingredient MUSS enthalten: name, quantity, unit, unit_type, emoji.
-Erlaubte unit-Werte: "stück", "g", "ml" — keine anderen.`
+Gib genau 21 Rezepte im Feld "recipes" zurück. Halte die Schritte ("steps") kurz und präzise.`
                         }
                     ]
                 }
-            ]
+            ],
+            max_output_tokens: 16000,
+            text: {
+                format: {
+                    type: "json_schema",
+                    name: "weekly_meal_plan",
+                    strict: true,
+                    schema: WEEK_PLAN_SCHEMA,
+                },
+            },
         });
 
-        const raw = response.output_text ?? "";
-        const recipes: Recipe[] = JSON.parse(raw);
+        // a truncated response (token limit) is reported here instead of surfacing as broken JSON
+        if (response.status !== "completed") {
+            console.error("Recipe generation incomplete:", response.status, response.incomplete_details);
+            return res.status(502).json({message: "Recipe generation was cut off — please try again"});
+        }
 
-        console.log("Erstes Rezept shopping_ingredients:", JSON.stringify(recipes[0]?.shopping_ingredients, null, 2));
+        let recipes: Recipe[];
+        try {
+            const parsed = JSON.parse(response.output_text ?? "");
+            recipes = parsed.recipes ?? [];
+        } catch (e) {
+            console.error("Model returned invalid JSON:", (response.output_text ?? "").slice(0, 300));
+            return res.status(502).json({message: "Invalid response from recipe generator — please try again"});
+        }
+
+        if (recipes.length === 0) {
+            return res.status(502).json({message: "No recipes generated — please try again"});
+        }
+
         console.log("Anzahl Rezepte:", recipes.length);
 
         const recipeShoppingMap = recipes.flatMap((recipe, i) =>
@@ -138,8 +197,10 @@ Erlaubte unit-Werte: "stück", "g", "ml" — keine anderen.`
                     name: item.name,
                     quantity: item.quantity,
                     unit: item.unit as "stück" | "g" | "ml",
-                    unit_type: item.unit_type as "count" | "weight" | "volume",
-                    emoji: item.emoji,
+                    // derive from unit when the model omits it — a missing value would
+                    // render as DEFAULT and fail the whole batch (unit_type has no default)
+                    unit_type: (item.unit_type ?? (item.unit === "g" ? "weight" : item.unit === "ml" ? "volume" : "count")) as "count" | "weight" | "volume",
+                    emoji: item.emoji ?? "🛒",
                     expires_at: new Date(),
                 }))
             ).returning()

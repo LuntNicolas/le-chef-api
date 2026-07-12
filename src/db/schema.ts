@@ -19,6 +19,7 @@ export const profilesTable = pgTable("profiles", {
     clerk_id: varchar({length: 256}).notNull(),
     household_id: uuid("household_id").references(() => householdsTable.id),
     dietary_prefs: jsonb(),
+    household_size: integer("household_size").notNull().default(2),
     created_at: timestamp("created_at").defaultNow().notNull(),
 })
 
@@ -40,6 +41,7 @@ export const recipesTable = pgTable("recipes", {
     title: varchar({length: 256}).notNull(),
     meal_type: varchar({length: 50}).notNull(),
     fridge_ingredient_ids: jsonb().notNull().default([]),    // string[]
+    fridge_ingredients: jsonb("fridge_ingredients").notNull().default([]), // {id, name, quantity, unit}[] — per-recipe amounts for cooking deduction
     shopping_ingredient_ids: jsonb().notNull().default([]),  // string[]
     steps: jsonb().notNull(),
     duration: integer().notNull(),
