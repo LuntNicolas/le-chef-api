@@ -139,8 +139,9 @@ Erstelle einen vollständigen Plan für die nächsten 7 Tage (${weekDates[0]} bi
 Pro Tag genau 3 Mahlzeiten: breakfast, lunch, dinner. Das ergibt genau 21 Rezepte.
 
 Regeln:
-- Kühlschrank-Zutaten haben eine ID — verwende diese exakt in "fridge_ingredients".
-- Fehlende Zutaten kommen in "shopping_ingredients" (keine ID nötig).
+- HÖCHSTE PRIORITÄT: Plane die Rezepte um die vorhandenen Kühlschrank-Zutaten herum — sie sollen aufgebraucht werden, bevor Neues gekauft wird. Die meisten Rezepte MÜSSEN mindestens eine Kühlschrank-Zutat verwenden.
+- Eine verwendete Kühlschrank-Zutat MUSS als Eintrag in "fridge_ingredients" mit ihrer exakten ID erscheinen (verwende exakt den Namen und die ID aus der Liste oben). Sie darf NIEMALS in "shopping_ingredients" auftauchen.
+- "shopping_ingredients" enthält NUR Zutaten, die nicht im Kühlschrank vorhanden sind.
 - Zutaten die bald ablaufen MÜSSEN an den ersten Tagen verwendet werden.
 - Verwende als "date" ausschließlich diese Werte: ${weekDates.join(", ")}. Format YYYY-MM-DD. "meal_type" ist exakt "breakfast", "lunch" oder "dinner".
 - Mengen und Kalorien beziehen sich auf ${householdSize} ${householdSize === 1 ? "Person" : "Personen"} — schätze realistisch.
@@ -376,7 +377,7 @@ export const getRecipesById = async (req: Request, res: Response) => {
 
         if (!recipe) return res.status(404).send("Recipe not found");
 
-        const storedFridgeIngredients = (recipe.fridge_ingredient_ids as FridgeIngredient[]) ?? [];
+        const storedFridgeIngredients = (recipe.fridge_ingredients as FridgeIngredient[]) ?? [];
         const fridgeIds = (recipe.fridge_ingredient_ids as string[]) ?? [];
         const shoppingIds = (recipe.shopping_ingredient_ids as string[]) ?? [];
 
