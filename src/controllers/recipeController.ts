@@ -113,7 +113,8 @@ export const generateRecipe = async (req: Request, res: Response) => {
             .where(eq(profilesTable.clerk_id, userId))
             .limit(1);
 
-        if (!profile) return res.status(404).send("Profile not found");
+        if (!profile?.household_id) return res.status(400).json({message: "No household found"});
+        const householdId = profile.household_id;
 
         const householdSize = profile.household_size ?? 2;
         const dietaryPrefs = Array.isArray(profile.dietary_prefs) ? profile.dietary_prefs as string[] : [];
@@ -186,14 +187,32 @@ Gib genau 21 Rezepte im Feld "recipes" zurück. Halte die Schritte ("steps") kur
 
         console.log("Anzahl Rezepte:", recipes.length);
 
-        const recipeShoppingMap = recipes.flatMap((recipe, i) =>
-            (recipe.shopping_ingredients ?? []).map((item) => ({recipeIndex: i, item}))
-        );
+        // generating replaces the previous plan — otherwise every run stacks
+        // duplicate recipes and shopping items on top of the old ones
+        await db.delete(shoppingTable).where(eq(shoppingTable.household_id, householdId));
+        await db.delete(recipesTable).where(eq(recipesTable.household_id, householdId));
 
-        const insertedShopping = recipeShoppingMap.length > 0
+        // merge identical ingredients across all recipes into one shopping row
+        // with the summed quantity ("Beeren 600g" x3 → "Beeren 1800g")
+        const aggregated = new Map<string, { item: ShoppingIngredient; recipeIndexes: Set<number> }>();
+        recipes.forEach((recipe, i) => {
+            (recipe.shopping_ingredients ?? []).forEach((item) => {
+                const key = `${item.name.trim().toLowerCase()}|${item.unit}`;
+                const existing = aggregated.get(key);
+                if (existing) {
+                    existing.item.quantity += item.quantity;
+                    existing.recipeIndexes.add(i);
+                } else {
+                    aggregated.set(key, {item: {...item, name: item.name.trim()}, recipeIndexes: new Set([i])});
+                }
+            });
+        });
+        const aggregatedList = [...aggregated.values()];
+
+        const insertedShopping = aggregatedList.length > 0
             ? await db.insert(shoppingTable).values(
-                recipeShoppingMap.map(({item}) => ({
-                    household_id: profile.household_id,
+                aggregatedList.map(({item}) => ({
+                    household_id: householdId,
                     name: item.name,
                     quantity: item.quantity,
                     unit: item.unit as "stück" | "g" | "ml",
@@ -206,19 +225,20 @@ Gib genau 21 Rezepte im Feld "recipes" zurück. Halte die Schritte ("steps") kur
             ).returning()
             : [];
 
-
+        // a merged shopping row can belong to several recipes
         const shoppingIdsByRecipe: Record<number, string[]> = {};
-        recipeShoppingMap.forEach(({recipeIndex}, i) => {
-            if (!shoppingIdsByRecipe[recipeIndex]) shoppingIdsByRecipe[recipeIndex] = [];
-            shoppingIdsByRecipe[recipeIndex]!.push(insertedShopping[i]!.id);
+        aggregatedList.forEach(({recipeIndexes}, idx) => {
+            const shoppingId = insertedShopping[idx]!.id;
+            recipeIndexes.forEach((recipeIndex) => {
+                (shoppingIdsByRecipe[recipeIndex] ??= []).push(shoppingId);
+            });
         });
 
         console.log("insertedShopping count:", insertedShopping.length);
-        console.log("shoppingIdsByRecipe:", JSON.stringify(shoppingIdsByRecipe, null, 2));
 
         await db.insert(recipesTable).values(
             recipes.map((recipe, i) => ({
-                household_id: profile.household_id,
+                household_id: householdId,
                 title: recipe.title,
                 meal_type: recipe.meal_type,
                 date: recipe.date,
@@ -226,6 +246,7 @@ Gib genau 21 Rezepte im Feld "recipes" zurück. Halte die Schritte ("steps") kur
                 duration: recipe.duration,
                 steps: recipe.steps,
                 fridge_ingredient_ids: (recipe.fridge_ingredients ?? []).map((f) => f.id),
+                fridge_ingredients: recipe.fridge_ingredients ?? [],
                 shopping_ingredient_ids: shoppingIdsByRecipe[i] ?? [],
             }))
         );
@@ -243,8 +264,8 @@ export const getRecipe = async (req: Request, res: Response) => {
 
     try {
         const {date} = req.query;
-        if (!date || date === "undefined") {
-            return res.status(400).json({message: "date required"});
+        if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return res.status(400).json({message: "date must be YYYY-MM-DD"});
         }
 
         const [profile] = await db
