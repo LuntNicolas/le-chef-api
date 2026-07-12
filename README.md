@@ -1,6 +1,7 @@
 # Le Chef — API
 
-REST API powering **Le Chef**, an AI meal-planning app for iOS: photograph your fridge, get a full week of recipes built
+REST API powering **Le Chef**, an AI meal-planning app for iOS an android: photograph your fridge, get a full week of
+recipes built
 around what you already have, and let missing ingredients land on a shared shopping list automatically.
 
 The goal: waste less food, skip the "what should we cook?" debate, and keep a whole household in sync.
@@ -22,14 +23,13 @@ Everything is scoped to a **household**, so multiple people share one fridge, on
 
 ## Tech stack
 
-| Layer         | Choice                                                                    |
-|---------------|---------------------------------------------------------------------------|
-| Runtime       | Node.js, TypeScript (ESM), Express 5                                      |
-| Database      | Neon (serverless Postgres) via Drizzle ORM + drizzle-kit migrations       |
-| Auth          | Clerk (`@clerk/express`) — the app sends session JWTs as Bearer tokens    |
-| AI            | OpenAI Responses API (vision for fridge scanning, text for meal planning) |
-| Rate limiting | Upstash Redis sliding window                                              |
-| Deployment    | Railway (Nixpacks, `npm run build` → `npm start`)                         |
+| Layer      | Choice                                                                    |
+|------------|---------------------------------------------------------------------------|
+| Runtime    | Node.js, TypeScript (ESM), Express 5                                      |
+| Database   | Neon (serverless Postgres) via Drizzle ORM + drizzle-kit migrations       |
+| Auth       | Clerk (`@clerk/express`) — the app sends session JWTs as Bearer tokens    |
+| AI         | OpenAI Responses API (vision for fridge scanning, text for meal planning) |
+| Deployment | Railway (Nixpacks, `npm run build` → `npm start`)                         |
 
 ## Try it — public demo
 
@@ -139,29 +139,3 @@ npm run dev                 # tsx watch mode on :3000
 | `npx drizzle-kit generate` | Create a migration from schema changes     |
 | `npx drizzle-kit migrate`  | Apply migrations                           |
 | `npm run seed:demo`        | Seed the public demo household             |
-
-## Design decisions
-
-- **Household as the tenancy unit, not the user.** A fridge is shared by definition — every table hangs off
-  `household_id`, which makes multi-user sync trivial and keeps queries simple.
-- **LLM output is a contract, not a hope.** Both AI calls use OpenAI structured outputs with strict JSON schemas
-  (enums for units and meal types), truncated responses are detected via the response status, and everything still
-  passes through server-side unit normalization (`normalizeUnit`) before touching the database.
-- **Expiry-aware planning.** The generation prompt includes each item's expiry date and instructs the model to schedule
-  soon-to-expire ingredients early in the week — the food-waste feature is a prompt-engineering feature.
-- **Serverless-friendly stack.** Neon's HTTP driver and Upstash's REST Redis need no connection pooling, so the API can
-  scale to zero on Railway without dangling connections.
-
-## Roadmap
-
-- [x] Structured LLM outputs (JSON schema) for scan + generation
-- [x] Public read-only demo endpoints
-- [ ] OpenAPI spec + Swagger UI at `/docs`
-- [ ] zod request validation on all endpoints
-- [ ] Household invite flow (join an existing household by code)
-- [ ] Transactional multi-step writes (purchase → fridge move)
-- [ ] Test suite (unit conversion, endpoint integration with mocked LLM) + CI
-
-## Related
-
-- **Mobile app** — Expo / React Native iOS client (separate repository)
