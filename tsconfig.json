@@ -59,7 +59,8 @@
     // Resolves modules using Node’s ESM strategy
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "type.d.ts"
   ],
   "exclude": [
     "node_modules",

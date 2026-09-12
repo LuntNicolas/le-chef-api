@@ -17,25 +17,30 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.1",
-    "drizzle-kit": "^0.31.10",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "drizzle-kit": "^1.0.0-rc.4",
     "eslint": "^10.4.0",
     "install": "^0.13.0",
     "nodemon": "^3.1.14",
     "npm": "^11.16.0",
     "prettier": "^3.8.3",
     "ts-node": "^10.9.2",
-    "tsx": "^4.22.4"
+    "tsx": "^4.22.4",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@clerk/express": "^2.1.22",
     "@google/genai": "^2.8.0",
-    "@neondatabase/serverless": "^1.1.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
-    "drizzle-orm": "^0.45.2",
-    "openai": "^6.42.0",
     "dotenv": "^17.4.2",
-    "typescript": "^6.0.3",
-    "express": "^5.2.1"
+    "drizzle-orm": "^1.0.0-rc.4",
+    "express": "^5.2.1",
+    "openai": "^6.42.0",
+    "pg": "^8.23.0",
+    "postgres": "^3.4.9",
+    "supertest": "^7.2.2",
+    "typescript": "^6.0.3"
   }
 }

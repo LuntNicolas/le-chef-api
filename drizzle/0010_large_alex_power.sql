@@ -1,1 +1,0 @@
-ALTER TABLE "recipes" ADD COLUMN IF NOT EXISTS "fridge_ingredients" jsonb DEFAULT '[]'::jsonb NOT NULL;

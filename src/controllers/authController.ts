@@ -1,5 +1,5 @@
 import type {Request, Response} from "express";
-import {drizzle} from 'drizzle-orm/neon-http';
+import {drizzle} from 'drizzle-orm/node-postgres';
 import {getAuth, clerkClient} from "@clerk/express";
 import {householdsTable, profilesTable} from "../db/schema.ts";
 import {eq} from "drizzle-orm";

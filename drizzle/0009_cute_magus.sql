@@ -1,1 +1,0 @@
-ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "household_size" integer DEFAULT 2 NOT NULL;

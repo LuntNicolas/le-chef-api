@@ -1,6 +1,4 @@
 import express from 'express';
-import {sql} from "../config/db.ts";
-import {createHousehold} from "../controllers/authController.ts";
 import {addItem, deductItem, deleteItem, getFridge, scanFridge} from "../controllers/fridgeController.ts";
 
 const router = express.Router();
