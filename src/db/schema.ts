@@ -50,8 +50,11 @@ export const recipesTable = pgTable("recipes", {
     id: uuid().primaryKey().defaultRandom(),
     household_id: uuid("household_id").references(() => householdsTable.id),
     title: varchar({length: 256}).notNull(),
-    servings: integer().notNull().default(1),
+
     meal_type: varchar({length: 50}).notNull(),
+    fridge_ingredient_ids: jsonb().notNull().default([]),    // string[]
+    fridge_ingredients: jsonb("fridge_ingredients").notNull().default([]), // {id, name, quantity, unit}[] — per-recipe amounts for cooking deduction
+    shopping_ingredient_ids: jsonb().notNull().default([]),  // string[]
     steps: jsonb().notNull(),
     duration: integer().notNull(),
     date: date("date").notNull(),
@@ -66,6 +69,8 @@ export const shoppingTable = pgTable("shopping", {
     name: varchar({length: 256}).notNull(),
     quantity: numeric({precision: 10, scale: 2, mode: "number"}).notNull(), // statt integer!
     unit: unitEnum().notNull(),
+    unit_type: unitTypeEnum().notNull(), // redundant, aber praktisch für Queries/Filter
+    emoji: varchar({length: 10}).notNull(),
     purchased: boolean().notNull().default(false),
     expires_at: timestamp("expires_at"),
 })
