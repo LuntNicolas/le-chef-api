@@ -1,25 +1,18 @@
-export type UnitType = "count" | "weight" | "volume";
+export const VALID_UNITS: string[] = ["g", "kg", "ml", "l"];
 
-export const VALID_UNITS: Record<UnitType, string[]> = {
-    count: ["stück", "packung", "flasche", "glas", "dose"],
-    weight: ["g", "kg"],
-    volume: ["ml", "l"],
-};
-
-const DEFAULT_UNIT: Record<UnitType, string> = {
-    count: "stück",
+const DEFAULT_UNIT: string = {
     weight: "g",
     volume: "ml",
 };
 
-export const FOOD_UNIT_DEFAULTS: Record<string, { unit: string; unit_type: UnitType }> = {
-    "ei": {unit: "stück", unit_type: "count"},
-    "apfel": {unit: "stück", unit_type: "count"},
-    "joghurt": {unit: "stück", unit_type: "count"},
-    "mehl": {unit: "g", unit_type: "weight"},
-    "zucker": {unit: "g", unit_type: "weight"},
-    "milch": {unit: "ml", unit_type: "volume"},
-    "öl": {unit: "ml", unit_type: "volume"},
+export const FOOD_UNIT_DEFAULTS: Record<string, { unit: string; }> = {
+    "ei": {unit: "stück"},
+    "apfel": {unit: "stück"},
+    "joghurt": {unit: "stück"},
+    "mehl": {unit: "g"},
+    "zucker": {unit: "g"},
+    "milch": {unit: "ml"},
+    "öl": {unit: "ml"},
 };
 
 function inferUnitType(rawUnit: string): UnitType {

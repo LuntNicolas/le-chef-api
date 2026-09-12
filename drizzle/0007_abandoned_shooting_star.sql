@@ -1,1 +1,0 @@
-ALTER TABLE "recipes" ADD COLUMN "kcal" integer DEFAULT 0 NOT NULL;

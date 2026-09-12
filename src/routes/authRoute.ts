@@ -1,7 +1,9 @@
 import express from 'express';
-import {sql} from "../config/db.ts";
+import {db} from "../config/db.ts";
 import {createHousehold, createUser, getMe, getUserByUserId, updatePrefs} from "../controllers/authController.ts"
 import {getAuth, clerkClient} from "@clerk/express";
+import {eq} from "drizzle-orm";
+import {profilesTable} from "../db/schema.ts";
 
 const router = express.Router();
 
@@ -36,9 +38,10 @@ router.get("/:userId", getUserByUserId)
 router.delete("/:userId", async (req, res) => {
     try {
         const {userId} = req.params;
-        const result = await sql`DELETE
-                                 FROM users
-                                 WHERE user_id = ${userId} RETURNING *`;
+        // const result = await sql`DELETE
+        //                          FROM users
+        //                          WHERE user_id = ${userId} RETURNING *`;
+        const result = await db.delete(profilesTable).where(eq(profilesTable.user_id, userId));
 
         if (result.length === 0) {
             return res.status(404).json({message: "User not found"});

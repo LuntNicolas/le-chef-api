@@ -1,12 +1,19 @@
-import {jsonb, pgTable, varchar, uuid, timestamp, integer, date, numeric, boolean, pgEnum} from "drizzle-orm/pg-core";
+import {
+    jsonb,
+    pgTable,
+    varchar,
+    uuid,
+    timestamp,
+    integer,
+    date,
+    numeric,
+    boolean,
+    pgEnum,
+    uniqueIndex,
+    unique
+} from "drizzle-orm/pg-core";
 
-export const unitTypeEnum = pgEnum("unit_type", ["count", "weight", "volume"]);
-
-export const unitEnum = pgEnum("unit", [
-    "stück", "packung", "flasche", "glas", "dose", // count
-    "g", "kg",                                      // weight
-    "ml", "l"                                        // volume
-]);
+export const unitEnum = pgEnum("unit", ["g", "kg", "ml", "l"]);
 
 export const householdsTable = pgTable("households", {
     id: uuid().primaryKey().defaultRandom(),
@@ -24,16 +31,20 @@ export const profilesTable = pgTable("profiles", {
 })
 
 export const fridgeTable = pgTable("fridge", {
-    id: uuid().primaryKey().defaultRandom(),
-    household_id: uuid("household_id").references(() => householdsTable.id),
-    added_by: uuid("added_by").references(() => profilesTable.user_id),
-    name: varchar({length: 256}).notNull(),
-    quantity: numeric({precision: 10, scale: 2, mode: "number"}).notNull(), // statt integer!
-    unit: unitEnum().notNull(),
-    unit_type: unitTypeEnum().notNull(), // redundant, aber praktisch für Queries/Filter
-    emoji: varchar({length: 10}).notNull(),
-    expires_at: timestamp("expires_at"),
-})
+        id: uuid().primaryKey().defaultRandom(),
+        household_id: uuid("household_id").references(() => householdsTable.id),
+        added_by: uuid("added_by").references(() => profilesTable.user_id),
+        name: varchar({length: 256}).notNull(),
+        quantity: numeric({precision: 10, scale: 2, mode: "number"}).notNull(), // statt integer!
+        unit: unitEnum().notNull(),
+        expires_at: timestamp("expires_at"),
+    },
+    (table) => [unique("unique").on(
+        table.household_id,
+        table.name,
+        table.expires_at
+    )]
+)
 
 export const recipesTable = pgTable("recipes", {
     id: uuid().primaryKey().defaultRandom(),
@@ -48,6 +59,7 @@ export const recipesTable = pgTable("recipes", {
     duration: integer().notNull(),
     date: date("date").notNull(),
     kcal: integer().notNull().default(0),
+    ingridents: jsonb().notNull(),
 })
 
 export const shoppingTable = pgTable("shopping", {
@@ -61,4 +73,16 @@ export const shoppingTable = pgTable("shopping", {
     emoji: varchar({length: 10}).notNull(),
     purchased: boolean().notNull().default(false),
     expires_at: timestamp("expires_at"),
+})
+
+export const recipesFridgeTable = pgTable("recipes_fridge", {
+    id: uuid().primaryKey().defaultRandom(),
+    recipe_id: uuid("recipe_id").references(() => recipesTable.id),
+    fridge_id: uuid("fridge_id").references(() => fridgeTable.id),
+})
+
+export const recipesShoppingTable = pgTable("recipes_shopping", {
+    id: uuid().primaryKey().defaultRandom(),
+    recipe_id: uuid("recipe_id").references(() => recipesTable.id),
+    shopping_id: uuid("shopping_id").references(() => shoppingTable.id),
 })

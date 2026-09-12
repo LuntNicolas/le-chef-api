@@ -5,11 +5,11 @@ type UnitEnumValue = typeof unitEnum.enumValues[number];
 function toBase(quantity: number, unit: string): number {
     switch (unit.toLowerCase()) {
         case "kg":
-            return quantity * 1000;   // → g
+            return quantity * 1000;
         case "l":
-            return quantity * 1000;   // → ml
+            return quantity * 1000;
         default:
-            return quantity;           // g, ml, stück etc. bleiben
+            return quantity
     }
 }
 

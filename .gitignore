@@ -12,6 +12,7 @@ out/
 # Umgebungsvariablen & Geheimnisse
 .env
 !.env.example
+.env.*
 
 # Logs & Debugging
 npm-debug.log*
