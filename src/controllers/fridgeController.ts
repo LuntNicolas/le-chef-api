@@ -1,10 +1,10 @@
 import type {Request, Response} from "express";
-import {drizzle} from 'drizzle-orm/neon-http';
+import {drizzle} from 'drizzle-orm/node-postgres';
 import {getAuth} from "@clerk/express";
 import genAI from "../config/gemini.ts";
 import openAI from "../config/openai.ts";
 import {fridgeTable, profilesTable, recipesTable} from "../db/schema.ts";
-import {eq, asc} from "drizzle-orm";
+import {eq, asc, sql} from "drizzle-orm";
 import {normalizeUnit} from "../utils/normalizeUnit.ts";
 import {deductAmount} from "../utils/deductAmount.ts";
 import {unitEnum} from "../db/schema.ts";
@@ -24,12 +24,12 @@ const SCAN_SCHEMA = {
             items: {
                 type: "object",
                 additionalProperties: false,
-                required: ["name", "quantity", "unit", "emoji", "expires_at"],
+                required: ["name", "quantity", "unit", "expires_at"],
                 properties: {
                     name: {type: "string", description: "generic name, max 15 chars, no brands"},
                     quantity: {type: "number"},
-                    unit: {type: "string", enum: ["stück", "packung", "flasche", "glas", "dose", "g", "ml"]},
-                    emoji: {type: "string", description: "exactly one fitting emoji"},
+                    // unit: {type: "string", enum: ["mg", "l", "g", "ml"]},
+                    unit: unitEnum,
                     expires_at: {type: "string", description: "YYYY-MM-DD"},
                 },
             },
@@ -47,7 +47,6 @@ export const scanFridge = async (req: Request, res: Response) => {
     if (!userId) {
         return res.status(404).send("No user found with the user id");
     }
-
     const {image, household_id, user_id} = req.body;
     if (!image) return res.status(400).send("No image provided");
 
@@ -88,15 +87,10 @@ Schätze Mengen konservativ.
 Wenn die genaue Menge nicht erkennbar ist, verwende 1.
 EINHEITEN
 Verwende nur sinnvolle Einheiten:
-Stück
-Packung
-Flasche
-Glas
-Dose
 g
 ml
-EMOJIS
-Verwende genau ein passendes Emoji pro Artikel.
+mg
+l
 ABLAUFDATUM
 Falls ein Ablaufdatum sichtbar ist, verwende dieses.
 Falls kein Datum erkennbar ist:
@@ -128,7 +122,9 @@ Gib alle erkannten Artikel im Feld "items" zurück.
             return res.status(502).json({message: "Scan was cut off — please try again"});
         }
 
-        let items: any[];
+
+        let items: fridgeItemsType[];
+
         try {
             items = JSON.parse(response.output_text ?? "").items ?? [];
         } catch (e) {
@@ -158,8 +154,6 @@ Gib alle erkannten Artikel im Feld "items" zurück.
                     name: item.name,
                     quantity: norm.quantity,
                     unit: norm.unit as UnitEnumValue,
-                    unit_type: norm.unit_type,
-                    emoji: item.emoji,
                     expires_at: isNaN(parsedExpiry.getTime()) ? fallbackExpiry : parsedExpiry,
                     household_id: profile.household_id,
                     added_by: profile.user_id,
@@ -179,7 +173,7 @@ export const addItem = async (req: Request, res: Response) => {
     if (!userId) {
         return res.status(404).send("No user found with the user id");
     }
-    const {id, household_id, name, quantity, expires_at, unit, emoji, unit_type} = req.body;
+    const {id, name, quantity, expires_at, unit} = req.body;
 
     const [profile] = await db
         .select()
@@ -190,50 +184,21 @@ export const addItem = async (req: Request, res: Response) => {
 
     if (!profile.household_id || typeof profile.household_id !== "string") return res.status(400).json({message: "id required"});
 
-    const recipes = await db
-        .select()
-        .from(recipesTable)
-        .where(eq(recipesTable.household_id, profile.household_id));
-
-    const recipe = recipes.find((r) =>
-        (r.shopping_ingredient_ids as string[]).includes(id)
-    );
-
-    if (recipe) {
-        const updatedFridgeIds = [
-            ...(recipe.fridge_ingredient_ids as string[]),
-            id,
-        ];
-        const updatedShoppingIds = (recipe.shopping_ingredient_ids as string[])
-            .filter((sid) => sid !== id);
-
-        console.log(recipe.fridge_ingredient_ids);
-        console.log(typeof recipe.fridge_ingredient_ids);
-        console.log(Array.isArray(recipe.fridge_ingredient_ids));
-
-
-        const result = await db.update(recipesTable)
-            .set({
-                fridge_ingredient_ids: updatedFridgeIds,
-                shopping_ingredient_ids: updatedShoppingIds,
-            })
-            .where(eq(recipesTable.id, recipe.id)).returning();
-
-        console.log(result);
-
-        console.log("NACHHER (returning):", result[0]?.fridge_ingredient_ids);
-    }
-
-
     const insert = await db.insert(fridgeTable).values({
         id: id,
         household_id: profile.household_id,
+        added_by: profile.user_id,
         name: name,
         quantity: quantity,
         expires_at: new Date(expires_at),
-        emoji: emoji,
         unit: unit,
-        unit_type: unit_type,
+    }).onConflictDoUpdate({
+        target: [fridgeTable.household_id, fridgeTable.name, fridgeTable.expires_at],
+        set: {
+            quantity: sql`${fridgeTable.quantity}
+            +
+            ${quantity}`
+        },
     }).returning();
 
     return res.status(200).send(insert);
